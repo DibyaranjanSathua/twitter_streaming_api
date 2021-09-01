@@ -36,11 +36,25 @@ class StreamingAPI:
         print(json.dumps(response.json(), indent=4, sort_keys=True))
         return response.json()
 
+    def delete_all_rules(self):
+        """ Delete all the rules """
+        rules = self.get_all_rules().get("data", [])
+        ids = [x["id"] for x in rules]
+        payload = {
+            "delete": {"ids": ids}
+        }
+        response = requests.post(self.rules_endpoint, auth=self._bearer_token_auth, json=payload)
+        if not response.ok:
+            raise TwitterStreamingAPIError(
+                f"Error setting rules (HTTP {response.status_code}): {response.text}"
+            )
+        return response.json()
+
     def set_rules(self):
         """ Set rules for the streaming API """
         payload = {
             "add": [
-                {"value": "from:tweetviewertest", "tag": "tweetviewertest"},
+                {"value": "from:sathualabs"},
             ]
         }
         response = requests.post(self.rules_endpoint, auth=self._bearer_token_auth, json=payload)
@@ -53,7 +67,15 @@ class StreamingAPI:
 
     def get_real_time_tweets(self):
         """ Get real time stream """
-        response = requests.get(self.stream_endpoint, auth=self._bearer_token_auth, stream=True,)
+        query_params = {
+            "tweet.fields": "text,attachments,author_id,entities,referenced_tweets,created_at",
+            "user.fields": "id,name,username",
+            "expansions": "author_id,attachments.media_keys,referenced_tweets.id,referenced_tweets.id.author_id",
+            "media.fields": "url,type,media_key,preview_image_url",
+        }
+        response = requests.get(
+            self.stream_endpoint, auth=self._bearer_token_auth, stream=True, params=query_params
+        )
         if not response.ok:
             raise TwitterStreamingAPIError(
                 f"Error getting stream (HTTP {response.status_code}): {response.text}"
@@ -88,7 +110,7 @@ class StreamingAPI:
             "user.fields": "id,name,username",
             "expansions": "author_id,attachments.media_keys,referenced_tweets.id,referenced_tweets.id.author_id",
             "media.fields": "url,type,media_key,preview_image_url",
-            "max_results": 100
+            "max_results": 10
         }
         response = requests.get(
             self.search_endpoint, auth=self._bearer_token_auth, params=query_params
@@ -96,6 +118,17 @@ class StreamingAPI:
         if not response.ok:
             raise TwitterStreamingAPIError(
                 f"Error in recent tweet search (HTTP {response.status_code}): {response.text}"
+            )
+        print(json.dumps(response.json(), indent=4, sort_keys=True))
+        return response.json()
+
+    def get_tweet_by_id(self, tweet_id):
+        """ Get tweet by id """
+        url = f"{self.tweet_lookup_endpoint}/{tweet_id}"
+        response = requests.get(url, auth=self._bearer_token_auth)
+        if not response.ok:
+            raise TwitterStreamingAPIError(
+                f"Error in tweet lookup (HTTP {response.status_code}): {response.text}"
             )
         print(json.dumps(response.json(), indent=4, sort_keys=True))
         return response.json()
@@ -142,3 +175,8 @@ class StreamingAPI:
     def get_oembed_endpoint(self):
         """ Return embed HTML in an oEmbed-compatible format """
         return "https://publish.twitter.com/oembed"
+
+    @property
+    def tweet_lookup_endpoint(self):
+        """ Return endpoint for tweet lookup """
+        return f"{self.BASE_URL}/tweets"
